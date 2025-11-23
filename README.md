@@ -65,3 +65,7 @@ Licensed under the Polyform Noncommercial License 1.0.0 (no commercial use; fork
 - `smart_scraper_app2.py`: Simpler Streamlit loop on sync Playwright, focuses on navigate/extract with fewer tools; good for quick prompt iteration and Q&A.
 - `simple_agent.py`: Minimal CLI demo of tool-calling scrape + answer.
 - `watch_scraper_bot.py`: Headless watcher that resolves a URL with GPT, scrapes, and pushes summaries.
+
+## Logging
+- Per-run logs are written to `outputs/logs/run_*.json` with task, status, action/error notes, and a preview of the extracted output.
+- If a run fails to extract, status is `no_extract`; check errors in the log for selector/timeouts.

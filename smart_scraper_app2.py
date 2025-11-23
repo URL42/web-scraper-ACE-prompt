@@ -4,7 +4,6 @@ import time
 import random
 import threading
 import streamlit as st
-import speech_recognition as sr
 from typing import Dict, List
 from pathlib import Path
 from urllib.parse import urlparse
@@ -23,6 +22,8 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36"
 ]
 Path("outputs").mkdir(exist_ok=True)
+LOG_DIR = Path("outputs/logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 with open(GUIDELINES_PATH, "r", encoding="utf-8") as f:
     prompt_data = json.load(f)
@@ -135,6 +136,23 @@ def monitor_page(prompt: str, interval_sec=300):
         time.sleep(interval_sec)
 
 # --- GPT Agent ---
+def log_run(task: str, outcome: str, actions, errors, status: str):
+    try:
+        from datetime import datetime
+        payload = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "task": task,
+            "status": status,
+            "outcome_preview": (outcome or "")[:600],
+            "outcome_length": len(outcome or ""),
+            "actions": actions,
+            "errors": errors,
+        }
+        fname = LOG_DIR / f"run_{datetime.utcnow().strftime('%Y%m%dT%H%M%S%f')}.json"
+        fname.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    except Exception:
+        pass
+
 def run_agent(user_input: str, stream_output=True) -> str:
     controller = BrowserController()
     actions_for_ace: List[str] = []
@@ -212,19 +230,6 @@ def run_agent(user_input: str, stream_output=True) -> str:
     controller.close()
     return summary
 
-# --- Voice Input ---
-def recognize_voice() -> str:
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("🎤 Listening...")
-        audio = r.listen(source, timeout=5, phrase_time_limit=8)
-    try:
-        return r.recognize_google(audio)
-    except sr.UnknownValueError:
-        return "Sorry, could not understand you."
-    except sr.RequestError as e:
-        return f"Voice error: {e}"
-
 # --- Streamlit UI ---
 st.set_page_config(page_title="Browser Agent", layout="wide")
 st.title("🧠 GPT Browser Agent")
@@ -253,13 +258,7 @@ col1, col2 = st.columns([4, 1])
 with col1:
     user_input = st.text_input("Enter a task or question:", placeholder="e.g., What's Notion's pricing?")
 with col2:
-    use_voice = st.button("🎙️ Speak")
-
-if use_voice:
-    user_input = recognize_voice()
-    st.success(f"🔈 You said: {user_input}")
-
-run = st.button("🚀 Run Agent")
+    run = st.button("🚀 Run Agent")
 if run and user_input:
     st.markdown("### 🤖 GPT + Playwright Output")
     result = run_agent(user_input)

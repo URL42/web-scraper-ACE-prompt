@@ -5,7 +5,6 @@ import random
 import asyncio
 import threading
 import streamlit as st
-import speech_recognition as sr
 from typing import Dict, List
 from pathlib import Path
 from urllib.parse import urlparse
@@ -29,6 +28,8 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 GUIDELINES_PATH = "prompt_guidelines.json"
 Path("outputs").mkdir(exist_ok=True)
+LOG_DIR = Path("outputs/logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 PROFILE_PATH.mkdir(parents=True, exist_ok=True)
 
 with open(GUIDELINES_PATH, "r", encoding="utf-8") as f:
@@ -204,6 +205,23 @@ class AsyncBrowserController:
             return f"❌ Error during {tool}: {e}"
 
 # --- GPT + Tool Execution + Summary ---
+def log_run(task: str, outcome: str, actions, errors, status: str):
+    try:
+        from datetime import datetime
+        payload = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "task": task,
+            "status": status,
+            "outcome_preview": (outcome or "")[:600],
+            "outcome_length": len(outcome or ""),
+            "actions": actions,
+            "errors": errors,
+        }
+        fname = LOG_DIR / f"run_{datetime.utcnow().strftime('%Y%m%dT%H%M%S%f')}.json"
+        fname.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
 async def run_agent(user_input: str, stream_output=True) -> str:
     controller = AsyncBrowserController()
     await controller.start()
@@ -377,21 +395,10 @@ async def run_agent(user_input: str, stream_output=True) -> str:
         errors=errors_for_ace,
         preferences=st.session_state.get("ace_preferences", []),
     )
+    status = "success" if final_output else "no_extract"
+    log_run(user_input, final_output, actions_for_ace, errors_for_ace, status)
     return final_output
 
-
-# --- Voice Input ---
-def recognize_voice() -> str:
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("🎤 Listening...")
-        audio = r.listen(source, timeout=5, phrase_time_limit=8)
-    try:
-        return r.recognize_google(audio)
-    except sr.UnknownValueError:
-        return "Sorry, could not understand you."
-    except sr.RequestError as e:
-        return f"Voice error: {e}"
 
 # --- Background Monitor ---
 def start_monitoring(prompt: str):
@@ -437,14 +444,7 @@ col1, col2 = st.columns([4, 1])
 with col1:
     user_input = st.text_input("What would you like to do?", value=st.session_state.get("user_input", ""), placeholder="e.g., Find GTM jobs on Atlassian site")
 with col2:
-    use_voice = st.button("🎙️ Speak")
-
-if use_voice:
-    user_input = recognize_voice()
-    st.session_state["user_input"] = user_input
-    st.success(f"🔈 You said: {user_input}")
-
-# 🚀 Run agent
+    # 🚀 Run agent
 if st.button("🚀 Run Agent") and user_input:
     st.session_state["user_input"] = user_input
     st.markdown("### 🤖 GPT + Playwright Output")
