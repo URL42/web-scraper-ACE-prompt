@@ -1,0 +1,20 @@
+{
+  "notes": [
+    "Do not store secrets, tokens, session data, emails, or URLs with query parameters.",
+    "Summaries should focus on behaviors and steps, not raw scraped content.",
+    "User-supplied preferences are allowed and should be preserved."
+  ],
+  "never_store_terms": [
+    "password",
+    "token",
+    "cookie",
+    "session",
+    "secret",
+    "api_key"
+  ],
+  "redact_patterns": [
+    "sk-[A-Za-z0-9]{20,}",
+    "(?i)api[_-]?key\\\\s*[:=]\\\\s*\\\\S+",
+    "(?i)bearer\\\\s+[A-Za-z0-9\\\\-\\\\._]+"
+  ]
+}

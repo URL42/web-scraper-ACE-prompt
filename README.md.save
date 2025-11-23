@@ -1,0 +1,43 @@
+# OpenAI SDK Experiments
+
+A sandbox of agent prototypes that call the OpenAI API alongside Playwright, Streamlit, and assorted helper scripts. The code base currently contains:
+
+- `smart_scraper_app.py` — Streamlit UI that lets GPT choose a URL, scrape it with Playwright, and answer the user’s question from the captured text.
+- `smart_scraper_app2.py` — Variant for iterating on tool-calling prompts without the UI baggage.
+- `browser_agent.py` — Voice-enabled browsing agent that drives Chromium with Playwright, maintains a persistent profile, and follows instructions loaded from `prompt_guidelines.json`.
+- `watch_scraper_bot.py` — Task runner that watches the `scrapes/` folder and summarizes new captures to `summaries/`.
+- `simple_agent.py` — Minimal example of calling the Responses API and logging outputs.
+
+Utility folders:
+- `scrapes/`, `summaries/`, and `outputs/` store artifacts generated at runtime.
+- `user_profiles/` contains Playwright user data for persistent sessions.
+
+## Requirements
+- Python 3.10+
+- Dependencies declared in `requirements.txt` (install with `pip install -r requirements.txt`)
+- An `OPENAI_API_KEY` in your environment for any script that instantiates `OpenAI()`
+- Playwright installed with the Chromium browser for scraping features (`playwright install chromium`)
+
+## Setup
+```bash
+cd OpenAI_SDK
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium  # once per machine
+cp .env.example .env  # if you maintain one
+```
+Populate environment variables such as:
+```env
+OPENAI_API_KEY=sk-...
+DISCORD_WEBHOOK=...
+```
+Some agents may expect additional keys (see prompts or inline comments for the most current list).
+
+## Running Examples
+- Smart scraper UI: `streamlit run smart_scraper_app.py`
+- Background scraping / answering: `python smart_scraper_app2.py "What changed on the Notion pricing page?"`
+- Browser agent: `python browser_agent.py` (launches an interactive Streamlit dashboard + Playwright browser)
+- Watcher bot: `python watch_scraper_bot.py`
+
+Each script logs intermediate artifacts either to stdout or into the folders noted above so you can inspect GPT’s tool calls and responses.
+

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Environments
+.venv/
+venv/
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime artifacts
+outputs/
+scrapes/
+summaries/
+user_profiles/
+*.log
+history.json
+last_page_debug.html
+playbook.json
+
+# Local config
+.env
+*.env.local
