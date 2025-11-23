@@ -2,7 +2,6 @@
 
 A sandbox of agent prototypes that call the OpenAI API alongside Playwright, Streamlit, and assorted helper scripts. The code base currently contains:
 
-- `smart_scraper_app.py` — Streamlit UI that lets GPT choose a URL, scrape it with Playwright, and answer the user’s question from the captured text.
 - `smart_scraper_app2.py` — Variant for iterating on tool-calling prompts without the UI baggage.
 - `browser_agent.py` — Voice-enabled browsing agent that drives Chromium with Playwright, maintains a persistent profile, and follows instructions loaded from `prompt_guidelines.json`.
 - `watch_scraper_bot.py` — Task runner that watches the `scrapes/` folder and summarizes new captures to `summaries/`.
@@ -60,3 +59,9 @@ Licensed under the Polyform Noncommercial License 1.0.0 (no commercial use; fork
 - Extract fallback grabs full DOM snapshot if selectors fail.
 - Persistent profiles kept for Playwright to reuse cookies/sessions (can disable in code).
 - Selector/action errors get logged into ACE learnings to steer retries.
+
+## Agent differences
+- `browser_agent.py`: Streamlit UI + async Playwright, persistent profiles, voice input, background monitor, richer tools (screenshots/highlights/scroll), ACE sidebar, multi-step plans.
+- `smart_scraper_app2.py`: Simpler Streamlit loop on sync Playwright, focuses on navigate/extract with fewer tools; good for quick prompt iteration and Q&A.
+- `simple_agent.py`: Minimal CLI demo of tool-calling scrape + answer.
+- `watch_scraper_bot.py`: Headless watcher that resolves a URL with GPT, scrapes, and pushes summaries.
