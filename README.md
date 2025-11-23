@@ -53,3 +53,10 @@ Each script logs intermediate artifacts either to stdout or into the folders not
 
 ## License
 Licensed under the Polyform Noncommercial License 1.0.0 (no commercial use; forks and noncommercial derivatives allowed). See `LICENSE`.
+
+## Scraping resilience defaults
+- Rotating user-agents + randomized viewport sizes per run.
+- Network-idle waits on navigation and human-like scroll/hover jitter.
+- Extract fallback grabs full DOM snapshot if selectors fail.
+- Persistent profiles kept for Playwright to reuse cookies/sessions (can disable in code).
+- Selector/action errors get logged into ACE learnings to steer retries.

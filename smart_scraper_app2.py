@@ -17,6 +17,11 @@ from ace import ace_manager
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 GUIDELINES_PATH = "prompt_guidelines.json"
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36"
+]
 Path("outputs").mkdir(exist_ok=True)
 
 with open(GUIDELINES_PATH, "r", encoding="utf-8") as f:
@@ -26,14 +31,20 @@ with open(GUIDELINES_PATH, "r", encoding="utf-8") as f:
 class BrowserController:
     def __init__(self):
         self.playwright = sync_playwright().start()
+        viewport = random.choice([
+            {"width": 1280, "height": 800},
+            {"width": 1366, "height": 768},
+            {"width": 1440, "height": 900}
+        ])
+        ua = random.choice(USER_AGENTS)
         self.browser = self.playwright.chromium.launch(headless=False, slow_mo=200)
-        self.context = self.browser.new_context(viewport={"width": 1280, "height": 800})
+        self.context = self.browser.new_context(viewport=viewport, user_agent=ua)
         self.page = self.context.new_page()
 
     def run_action(self, tool: str, args: Dict[str, str]) -> str:
         try:
             if tool == "navigate":
-                self.page.goto(args["url"], timeout=15000)
+                self.page.goto(args["url"], wait_until="networkidle", timeout=45000)
                 self.simulate_human()
                 self.try_autologin(args["url"])
                 return f"✅ Navigated to {args['url']}"
@@ -56,8 +67,15 @@ class BrowserController:
                 self.page.fill(args["selector"], args["text"])
                 return f"⌨️ Typed '{args['text']}' into {args['selector']}"
             elif tool == "extract":
-                content = self.page.inner_text(args["selector"])
-                return content[:2000]
+                try:
+                    content = self.page.inner_text(args["selector"])
+                    return content[:2000]
+                except Exception as e:
+                    try:
+                        html = self.page.content()
+                        return f"Fallback DOM extract (body): {html[:1500]}"
+                    except Exception as inner_e:
+                        return f"⚠️ Could not extract from {args['selector']} → {e} / fallback failed: {inner_e}"
             elif tool == "highlight":
                 self.page.eval_on_selector(args["selector"], "el => el.style.outline = '3px solid red'")
                 return f"🔍 Highlighted {args['selector']}"

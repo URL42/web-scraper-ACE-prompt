@@ -18,6 +18,11 @@ from ace import ace_manager
 PERSISTENT_PROFILE_ENABLED = True
 STEALTH_MODE_ENABLED = True
 PROFILE_PATH = Path("user_profiles/default")
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36"
+]
 
 # --- Setup ---
 load_dotenv()
@@ -75,8 +80,8 @@ class AsyncBrowserController:
     async def run_action(self, tool: str, args: Dict[str, str]) -> str:
         try:
             if tool == "navigate":
-                await self.page.goto(args["url"], wait_until='domcontentloaded', timeout=120000)
-                await asyncio.sleep(3)
+                await self.page.goto(args["url"], wait_until='networkidle', timeout=120000)
+                await asyncio.sleep(random.uniform(1.5, 3.5))
                 await self.simulate_human()
 
                 # Consent screen bypass (Google)
@@ -159,7 +164,11 @@ class AsyncBrowserController:
                         return content[:2000]
 
                 except Exception as e:
-                    return f"⚠️ Could not extract from {args['selector']} → {e}"
+                    try:
+                        html = await self.page.content()
+                        return f"Fallback DOM extract (body): {html[:1500]}"
+                    except Exception as inner_e:
+                        return f"⚠️ Could not extract from {args['selector']} → {e} / fallback failed: {inner_e}"
 
             elif tool == "screenshot":
                 path = args.get("path", "outputs/page.png")
@@ -203,7 +212,7 @@ async def run_agent(user_input: str, stream_output=True) -> str:
 
     # Stealth User-Agent spoofing
     await controller.page.set_extra_http_headers({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/113.0.0.0 Safari/537.36"
+        "User-Agent": random.choice(USER_AGENTS)
     })
 
     messages = [{"role": "system", "content": prompt_data["system_instructions"]}]
