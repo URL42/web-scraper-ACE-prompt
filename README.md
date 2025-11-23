@@ -1,4 +1,4 @@
-# OpenAI SDK Experiments
+# web-scraper-ACE-prompt
 
 A sandbox of agent prototypes that call the OpenAI API alongside Playwright, Streamlit, and assorted helper scripts. The code base currently contains:
 
@@ -22,7 +22,7 @@ Utility folders:
 
 ## Setup
 ```bash
-cd OpenAI_SDK
+cd web-scraper-ACE-prompt
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium  # once per machine
