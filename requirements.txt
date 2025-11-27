@@ -2,6 +2,7 @@ streamlit
 openai
 python-dotenv
 playwright
+requests
 langchain
 speechrecognition
 pyaudio

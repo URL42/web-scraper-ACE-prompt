@@ -2,8 +2,7 @@
 
 A sandbox of agent prototypes that call the OpenAI API alongside Playwright, Streamlit, and assorted helper scripts. The code base currently contains:
 
-- `smart_scraper_app2.py` — Variant for iterating on tool-calling prompts without the UI baggage.
-- `browser_agent.py` — Voice-enabled browsing agent that drives Chromium with Playwright, maintains a persistent profile, and follows instructions loaded from `prompt_guidelines.json`.
+- `browser_agent.py` — Streamlit browsing agent that drives Chromium with Playwright, maintains a persistent profile, and follows instructions loaded from `prompt_guidelines.json`.
 - `watch_scraper_bot.py` — Task runner that watches the `scrapes/` folder and summarizes new captures to `summaries/`.
 - `simple_agent.py` — Minimal example of calling the Responses API and logging outputs.
 - `ace.py` + `playbook.json` — Lightweight ACE (Generator/Reflector/Curator) loop with guardrails-backed self-learning.
@@ -31,12 +30,12 @@ Populate environment variables such as:
 ```env
 OPENAI_API_KEY=sk-...
 DISCORD_WEBHOOK=...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
 ```
 Some agents may expect additional keys (see prompts or inline comments for the most current list).
 
 ## Running Examples
-- Smart scraper UI: `streamlit run smart_scraper_app.py`
-- Background scraping / answering: `python smart_scraper_app2.py "What changed on the Notion pricing page?"`
 - Browser agent UI: `streamlit run browser_agent.py` (required for the Streamlit dashboard + Playwright browser; running `python browser_agent.py` alone will show ScriptRunContext warnings)
 - Watcher bot: `python watch_scraper_bot.py`
 - Simple CLI demo: `python simple_agent.py`
@@ -46,7 +45,7 @@ Each script logs intermediate artifacts either to stdout or into the folders not
 ## ACE self-learning (Generator → Reflector → Curator)
 - Files: `ace.py`, runtime `playbook.json` (gitignored; auto-created), `guardrails.json` (what not to store).
 - Prompt overlay: Each agent loads curated tips + user preferences into an extra system message on every run while keeping `prompt_guidelines.json` as the base. Tips are signature-matched to the current task with confidence scores, decay, and pruning to stay relevant.
-- Preferences: In the Streamlit apps (`browser_agent.py`, `smart_scraper_app2.py`), use the sidebar “Preferences to remember” box (stored in `playbook.json` with guardrails). For `watch_scraper_bot.py`, set `ACE_PREFERENCES="comma,separated,values"` in your environment. `simple_agent.py` records learnings automatically; no UI.
+- Preferences: In the Streamlit app (`browser_agent.py`), use the sidebar “Preferences to remember” box (stored in `playbook.json` with guardrails). For `watch_scraper_bot.py`, set `ACE_PREFERENCES="comma,separated,values"` in your environment. `simple_agent.py` records learnings automatically; no UI.
 - Loop cadence: After every task run (success or failure), Reflector + Curator append observations, filter with guardrails, and refresh the active tips used on the next invocation.
 - Guardrails: `guardrails.json` blocks secrets/tokens and keeps learnings high-level while allowing user preference capture. Avoid pasting secrets into preferences.
 
@@ -61,11 +60,24 @@ Licensed under the Polyform Noncommercial License 1.0.0 (no commercial use; fork
 - Selector/action errors get logged into ACE learnings to steer retries.
 
 ## Agent differences
-- `browser_agent.py`: Streamlit UI + async Playwright, persistent profiles, voice input, background monitor, richer tools (screenshots/highlights/scroll), ACE sidebar, multi-step plans.
-- `smart_scraper_app2.py`: Simpler Streamlit loop on sync Playwright, focuses on navigate/extract with fewer tools; good for quick prompt iteration and Q&A.
+- `browser_agent.py`: Streamlit UI + async Playwright, persistent profiles, background monitor, richer tools (screenshots/highlights/scroll), ACE sidebar, multi-step plans.
 - `simple_agent.py`: Minimal CLI demo of tool-calling scrape + answer.
 - `watch_scraper_bot.py`: Headless watcher that resolves a URL with GPT, scrapes, and pushes summaries.
+
+## Background monitors (browser_agent)
+- Create multiple monitors from the Streamlit UI with schedules (`interval`, `daily`, `weekly`, `monthly`) and per-monitor labels.
+- Start/pause/run-now/delete per monitor; active monitors auto-resume on app reload.
+- Change detection via content hashing and optional keyword filters (`notify_mode`: on_change/on_keyword/always/none).
+- Runs are stored in SQLite at `outputs/monitor/monitor.db` with raw outputs saved under `outputs/monitor/monitor_<id>/`. Export to CSV with `python3 export_monitor_db.py`.
+- Optional Telegram notifications when `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set.
 
 ## Logging
 - Per-run logs are written to `outputs/logs/run_*.json` with task, status, action/error notes, and a preview of the extracted output.
 - If a run fails to extract, status is `no_extract`; check errors in the log for selector/timeouts.
+- Background monitors also record into SQLite (`outputs/monitor/monitor.db`) and save raw summaries to `outputs/monitor/monitor_<monitor_id>/`.
+
+## ACE telemetry & methodology
+- Structured per-run signals: `goal_status` (`success`/`partial`/`failed`/`blocked`), `reason_for_status` (e.g., `selector_fail`, `timeout`, `captcha_block`, `login_required`, `no_relevant_content`), and a heuristic `answer_relevance_score` (higher when success with no errors; lower when failed/blocked). Hook is ready for an LLM critic later.
+- Structured per-action records: each tool call logs `tool`, sanitized `args` (url/selector/text_length), `result_type` (`ok`/`soft_fail`/`hard_fail`), `error_category` (timeout/selector_fail/captcha/login_required/wrong_page/none), `message`, `latency_ms`, `url/domain`, and `retries`.
+- Guardrails still apply to all stored text via `guardrails.json`; sensitive tokens/PII are redacted before persistence.
+- Playbook learning: `ace.py` stores structured entries in `playbook.json` (gitignored) and curates matched tips for future prompts; tips decay and are pruned to stay relevant. Preferences are preserved and injected as an overlay, not by editing `prompt_guidelines.json`.

@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 from ace import ace_manager
 
+ACE_DOMAIN = "simple_agent"
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -40,7 +41,7 @@ while True:
         break
 
     # Phase 1: GPT decides if it wants to call scrape_page
-    overlay = ace_manager.prompt_overlay(user_input)
+    overlay_text, used_tip_ids = ace_manager.prompt_overlay(user_input, domain=ACE_DOMAIN)
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=[
@@ -55,7 +56,7 @@ Instructions:
 """
             },
             {"role": "user", "content": user_input},
-            *([{"role": "system", "content": overlay}] if overlay else [])
+            *([{"role": "system", "content": overlay_text}] if overlay_text else [])
         ],
         tools=tools,
         tool_choice="auto"
@@ -84,11 +85,16 @@ Instructions:
                 actions=actions_for_ace,
                 errors=errors_for_ace,
                 preferences=[],
+                goal_status="failed",
+                reason_for_status="scrape_failed",
+                answer_relevance_score=None,
+                used_tip_ids=used_tip_ids,
+                domain=ACE_DOMAIN,
             )
             continue
 
         # Phase 2: Send scraped content back to GPT
-        overlay = ace_manager.prompt_overlay(user_input)
+        overlay_text, used_tip_ids = ace_manager.prompt_overlay(user_input, domain=ACE_DOMAIN)
         final_response = client.chat.completions.create(
             model="gpt-4.1",
             messages=[
@@ -104,7 +110,7 @@ Instructions:
                     "name": tool_call.function.name,
                     "content": scraped
                 },
-                *([{"role": "system", "content": overlay}] if overlay else [])
+                *([{"role": "system", "content": overlay_text}] if overlay_text else [])
             ]
         )
 
@@ -114,10 +120,26 @@ Instructions:
         final_output = msg.content
         print("\nAgent:", final_output)
 
+    goal_status = "success" if final_output and not errors_for_ace else ("partial" if final_output else "failed")
+    reason = ""
+    joined_err = " ".join(errors_for_ace).lower() if errors_for_ace else ""
+    if "captcha" in joined_err:
+        goal_status = "blocked"; reason = "captcha_block"
+    elif "login" in joined_err:
+        goal_status = "blocked"; reason = "login_required"
+    elif "timeout" in joined_err:
+        reason = "timeout"
+    elif errors_for_ace:
+        reason = "selector_fail"
     ace_manager.record_run(
         task=user_input,
         outcome=final_output or "",
         actions=actions_for_ace,
         errors=errors_for_ace,
         preferences=[],
+        goal_status=goal_status,
+        reason_for_status=reason,
+        answer_relevance_score=None,
+        used_tip_ids=used_tip_ids,
+        domain=ACE_DOMAIN,
     )

@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright
 from ace import ace_manager
 
 load_dotenv()
+ACE_DOMAIN = "watch_scraper"
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -46,13 +47,13 @@ def scrape_page(url: str) -> str:
     return text
 
 def resolve_url_with_gpt(query: str) -> str:
-    overlay = ace_manager.prompt_overlay(query)
+    overlay_text, used_tip_ids = ace_manager.prompt_overlay(query, domain=ACE_DOMAIN)
     resp = client.chat.completions.create(
         model="gpt-4.1",
         messages=[
             {"role": "system", "content": "You are a web assistant. Return the best URL to answer this question."},
             {"role": "user", "content": query},
-            *([{"role": "system", "content": overlay}] if overlay else [])
+            *([{"role": "system", "content": overlay_text}] if overlay_text else [])
         ]
     )
     guess = resp.choices[0].message.content.strip()
@@ -91,6 +92,11 @@ def check_for_update():
         actions=[f"scraped {url}"],
         errors=[],
         preferences=USER_PREFERENCES,
+        goal_status="success",
+        reason_for_status="ok",
+        answer_relevance_score=None,
+        used_tip_ids=used_tip_ids if "used_tip_ids" in locals() else [],
+        domain=ACE_DOMAIN,
     )
 
 if __name__ == "__main__":
