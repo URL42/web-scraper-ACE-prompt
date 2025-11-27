@@ -729,7 +729,7 @@ async def run_agent(user_input: str, stream_output=True) -> str:
         messages.append({"role": "system", "content": overlay_text})
 
     try:
-        response = client.chat.completions.create(model="gpt-4.1", messages=messages)
+        response = client.chat.completions.create(model="gpt-5.1", messages=messages)
         raw = response.choices[0].message.content.strip()
         if raw.startswith("```"):
             raw = raw.split("```")[-1].strip()
@@ -838,7 +838,7 @@ async def run_agent(user_input: str, stream_output=True) -> str:
 
         try:
             clean_response = client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-5.1",
                 messages=[
                     {"role": "system", "content": "You are cleaning raw HTML or scraped page text to extract just the meaningful content (e.g., job titles, product descriptions, listings)."},
                     {"role": "user", "content": summary}
@@ -850,7 +850,7 @@ async def run_agent(user_input: str, stream_output=True) -> str:
             st.markdown("---")
             st.markdown("#### 🧠 GPT Summary (based on scrape + original question)")
             followup = client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-5.1",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant summarizing scraped web content."},
                     {"role": "user", "content": f"Here is what the user asked: {user_input}"},
@@ -935,7 +935,7 @@ if st.session_state.get("last_summary") and st.session_state.get("last_query"):
         st.markdown("### 💬 Follow-up Answer")
         try:
             follow_response = client.chat.completions.create(
-                model="gpt-4.1",
+                model="gpt-5.1",
                 messages=[
                     {"role": "system", "content": "You are continuing a conversation based on a previous scrape."},
                     {"role": "user", "content": st.session_state["last_query"]},
@@ -956,7 +956,7 @@ with st.form("create_monitor"):
     mon_prompt = st.text_area("Prompt to run", placeholder="What changed on the Notion pricing page?")
     mon_urls = st.text_area("Target URLs (optional, one per line)", placeholder="https://example.com")
 
-    sched_type = st.selectbox("Schedule type", ["interval", "daily", "weekly"], index=0)
+    sched_type = st.selectbox("Schedule type", ["interval", "daily", "weekly", "monthly"], index=0)
     interval_minutes = 300
     daily_time_val = dtime(hour=9, minute=0)
     weekly_day_val = 0
@@ -1055,10 +1055,10 @@ else:
 
         if start_btn:
             start_monitor_runner(m["id"])
-            st.experimental_rerun()
+            st.rerun()
         if pause_btn:
             stop_monitor_runner(m["id"])
-            st.experimental_rerun()
+            st.rerun()
         if run_now_btn:
             fresh = monitor_db.get_monitor(m["id"])
             if fresh:
@@ -1068,7 +1068,7 @@ else:
                 st.warning("Monitor not found.")
         if delete_btn:
             delete_monitor(m["id"])
-            st.experimental_rerun()
+            st.rerun()
 
 # 📝 Show history
 if st.session_state.action_log:
