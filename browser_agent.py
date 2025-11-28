@@ -23,6 +23,25 @@ ACE_DOMAIN = "browser_agent"
 PERSISTENT_PROFILE_ENABLED = True
 STEALTH_MODE_ENABLED = True
 PROFILE_PATH = Path("user_profiles/default")
+VIEWPORTS = [
+    {"width": 1280, "height": 800},
+    {"width": 1366, "height": 768},
+    {"width": 1440, "height": 900},
+    {"width": 1920, "height": 1080},
+]
+TIMEZONES = [
+    "UTC",
+    "America/New_York",
+    "America/Los_Angeles",
+    "Europe/London",
+    "Europe/Berlin",
+    "Asia/Singapore",
+]
+LOCALES = [
+    "en-US",
+    "en-GB",
+    "en-CA",
+]
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/123.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
@@ -465,17 +484,29 @@ class AsyncBrowserController:
 
     async def start(self):
         self.playwright = await async_playwright().start()
+        viewport = random.choice(VIEWPORTS)
+        locale = random.choice(LOCALES)
+        timezone_id = random.choice(TIMEZONES)
+        extra_headers = {"User-Agent": random.choice(USER_AGENTS), "Accept-Language": locale}
+
         if PERSISTENT_PROFILE_ENABLED:
             self.browser = await self.playwright.chromium.launch_persistent_context(
                 user_data_dir=str(PROFILE_PATH),
                 headless=False,
-                viewport={"width": 1280, "height": 800},
-                locale="en-US"
+                viewport=viewport,
+                locale=locale,
+                timezone_id=timezone_id,
+                extra_http_headers=extra_headers,
             )
             self.page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
         else:
             self.browser = await self.playwright.chromium.launch(headless=False, slow_mo=200)
-            self.context = await self.browser.new_context(viewport={"width": 1280, "height": 800})
+            self.context = await self.browser.new_context(
+                viewport=viewport,
+                locale=locale,
+                timezone_id=timezone_id,
+                extra_http_headers=extra_headers,
+            )
             self.page = await self.context.new_page()
 
         if STEALTH_MODE_ENABLED:
@@ -493,10 +524,10 @@ class AsyncBrowserController:
             await self.playwright.stop()
 
     async def simulate_human(self):
-        await asyncio.sleep(random.uniform(2.5, 4.5))
-        await self.page.mouse.wheel(0, 600)
-        await self.page.mouse.move(100, 300)
-        await asyncio.sleep(random.uniform(0.5, 1.0))
+        await asyncio.sleep(random.uniform(2.0, 3.5))
+        await self.page.mouse.wheel(0, random.randint(400, 900))
+        await self.page.mouse.move(random.randint(50, 300), random.randint(150, 400))
+        await asyncio.sleep(random.uniform(0.4, 0.9))
 
     async def run_action(self, tool: str, args: Dict[str, str]) -> str:
         try:
@@ -518,12 +549,14 @@ class AsyncBrowserController:
             elif tool == "click":
                 try:
                     await self.page.click(args["selector"], timeout=5000)
+                    await self.simulate_human()
                     return f"🖱️ Clicked {args['selector']}"
                 except Exception as e:
                     try:
                         await self.page.hover(args["selector"])
                         await asyncio.sleep(1)
                         await self.page.click(args["selector"], timeout=3000)
+                        await self.simulate_human()
                         return f"🖱️ Clicked {args['selector']} after hover"
                     except:
                         await self.page.eval_on_selector(args["selector"], "el => el.style.outline = '3px solid red'")
@@ -537,6 +570,7 @@ class AsyncBrowserController:
                         content = (await el.inner_text()).strip().lower()
                         if text in content:
                             await el.click()
+                            await self.simulate_human()
                             return f"🖱️ Clicked element containing text: '{args['text']}'"
                     except:
                         continue
@@ -548,6 +582,7 @@ class AsyncBrowserController:
                     await element.click()
                     await element.fill("")
                     await element.type(args["text"])
+                    await self.simulate_human()
                     return f"⌨️ Typed '{args['text']}' into {args['selector']}"
                 except Exception as e:
                     # Retry with fallback selector if Google
@@ -558,6 +593,7 @@ class AsyncBrowserController:
                             await el.click()
                             await el.fill("")
                             await el.type(args["text"])
+                            await self.simulate_human()
                             return f"⌨️ Fallback typed into '{fallback}'"
                         except:
                             pass
