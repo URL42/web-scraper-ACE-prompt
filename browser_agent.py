@@ -356,7 +356,7 @@ async def execute_monitor_run(monitor: Dict[str, Any]) -> Dict[str, Any]:
     notified = False
 
     try:
-        summary = await run_agent(monitor["prompt"], stream_output=False)
+        summary = await run_agent(monitor["prompt"], stream_output=False, headless=True)
         raw_dir = MONITOR_DIR / f"monitor_{monitor_id}"
         raw_dir.mkdir(parents=True, exist_ok=True)
         raw_path = raw_dir / f"{start_time.strftime('%Y%m%dT%H%M%S')}.txt"
@@ -476,11 +476,12 @@ def delete_monitor(monitor_id: int):
 
 # --- Async Browser Controller ---
 class AsyncBrowserController:
-    def __init__(self):
+    def __init__(self, headless: bool = False):
         self.playwright = None
         self.browser = None
         self.context = None
         self.page = None
+        self.headless = headless
 
     async def start(self):
         self.playwright = await async_playwright().start()
@@ -492,7 +493,7 @@ class AsyncBrowserController:
         if PERSISTENT_PROFILE_ENABLED:
             self.browser = await self.playwright.chromium.launch_persistent_context(
                 user_data_dir=str(PROFILE_PATH),
-                headless=False,
+                headless=self.headless,
                 viewport=viewport,
                 locale=locale,
                 timezone_id=timezone_id,
@@ -500,7 +501,7 @@ class AsyncBrowserController:
             )
             self.page = self.browser.pages[0] if self.browser.pages else await self.browser.new_page()
         else:
-            self.browser = await self.playwright.chromium.launch(headless=False, slow_mo=200)
+            self.browser = await self.playwright.chromium.launch(headless=self.headless, slow_mo=200)
             self.context = await self.browser.new_context(
                 viewport=viewport,
                 locale=locale,
@@ -733,8 +734,8 @@ def log_run(task: str, outcome: str, actions, errors, status: str):
     except Exception:
         pass
 
-async def run_agent(user_input: str, stream_output=True) -> str:
-    controller = AsyncBrowserController()
+async def run_agent(user_input: str, stream_output=True, headless: bool = False, structured_fields: Optional[List[str]] = None) -> str:
+    controller = AsyncBrowserController(headless=headless)
     await controller.start()
     action_records: List[Dict[str, Any]] = []
     errors_for_ace: List[str] = []
@@ -905,6 +906,45 @@ async def run_agent(user_input: str, stream_output=True) -> str:
         st.warning("⚠️ Skipping summarization due to failed or invalid extract.")
         final_output = summary
 
+    structured_data = None
+    if structured_fields:
+        base_text = locals().get("cleaned_summary") or final_output or summary
+        field_list = ", ".join(structured_fields)
+        if base_text:
+            try:
+                struct_resp = client.chat.completions.create(
+                    model="gpt-5.1",
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Extract structured items from the provided page text. "
+                                f"Fields: {field_list}. "
+                                "Return JSON with key 'items' as a list of objects. "
+                                "Use empty strings if a field is missing. "
+                                "Limit to 20 items. No prose."
+                            ),
+                        },
+                        {"role": "user", "content": base_text[:6000]},
+                    ],
+                )
+                struct_content = struct_resp.choices[0].message.content
+                parsed_struct = json.loads(struct_content) if struct_content else {}
+                structured_data = parsed_struct.get("items") if isinstance(parsed_struct, dict) else parsed_struct
+                if stream_output and structured_data:
+                    st.markdown("#### 📊 Structured output")
+                    st.json({"items": structured_data})
+            except Exception as e:
+                if stream_output:
+                    st.warning(f"Structured output failed: {e}")
+
+    if structured_data:
+        try:
+            final_output = (final_output or "") + "\n\nStructured:\n" + json.dumps(structured_data, indent=2)
+        except Exception:
+            pass
+
     goal_data = infer_goal(final_output, action_records, errors_for_ace)
     ace_manager.record_run(
         task=user_input,
@@ -934,6 +974,10 @@ if "user_input" not in st.session_state:
     st.session_state.user_input = ""
 if "ace_preferences" not in st.session_state:
     st.session_state.ace_preferences = []
+if "headless_mode" not in st.session_state:
+    st.session_state.headless_mode = False
+if "structured_fields_raw" not in st.session_state:
+    st.session_state.structured_fields_raw = ""
 
 # Restart any monitors that were marked active.
 resume_active_monitors()
@@ -951,6 +995,20 @@ with st.sidebar:
     if sidebar_overlay:
         st.markdown("**Active tips**")
         st.code(sidebar_overlay)
+    st.subheader("Run options")
+    st.checkbox(
+        "Headless mode (hide browser window)",
+        value=st.session_state.headless_mode,
+        key="headless_mode",
+        help="Enable for background runs or when you don't need to see the browser.",
+    )
+    st.text_input(
+        "Structured fields (comma separated, optional)",
+        value=st.session_state.structured_fields_raw,
+        key="structured_fields_raw",
+        placeholder="title, link, date",
+        help="If set, outputs an extra structured JSON using these fields.",
+    )
 
 col1, col2 = st.columns([4, 1])
 with col1:
@@ -958,10 +1016,13 @@ with col1:
 with col2:
     run = st.button("🚀 Run Agent")
 
+structured_fields = [f.strip() for f in st.session_state.get("structured_fields_raw", "").split(",") if f.strip()]
+headless_flag = bool(st.session_state.get("headless_mode"))
+
 if run and user_input:
     st.markdown("### 🤖 GPT + Playwright Output")
     st.session_state.user_input = user_input  # Save it again just in case
-    asyncio.run(run_agent(user_input))
+    asyncio.run(run_agent(user_input, headless=headless_flag, structured_fields=structured_fields))
     st.session_state.action_log.append(f"🗣️ {user_input}")
 
 # 🔁 Follow-up input (based on last scrape/summary)
